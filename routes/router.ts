@@ -24,13 +24,8 @@ const router = Router();
 
 router.post("/savemensaje", (req: Request, res: Response) => {
     const mensaje = req.body.mensaje;
-    const autor = req.body.de;
-    const query =
-      "insert into mensajes (de , mensaje ) VALUES ('" +
-      autor +
-      "','" +
-      mensaje +
-      "');";
+    const emisor = req.body.de;
+    const query = "insert into mensajes (de , mensaje ) VALUES ('" + emisor + "','" + mensaje + "');";
   
     let respuesta = client.query(query, (err: any, resp: any) => {
       if (err) {
@@ -70,6 +65,17 @@ router.post("/savemensaje", (req: Request, res: Response) => {
       de,
       id,
     });
+  });
+
+  router.get("/getMensajes", (req: Request, res: Response) => {
+    client.query("SELECT * FROM mensajes", (err: any, resp: any) => {
+      if (err) {
+        res.send(err);
+      } else {
+        res.send(resp);
+      }
+    });
+    client.end();
   });
   
 
