@@ -1,0 +1,130 @@
+#Crear namespace
+#apiVersion: v1
+#kind: Namespace
+#metadata:
+# name: juan-namespace
+
+#-------------------POSTGRES-------------------------
+# Volumen persistente 
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-postgres-vol1
+  namespace: juan-namespace
+spec: #Configuración de lo que va a contruir a nivel de disco
+  storageClassName: postgres
+  capacity:
+    storage: 10Gi # Capacidad
+  accessModes:
+    - ReadWriteOnce # Lectura y escritura
+  hostPath:
+    path: "/mnt/postgres-vol1" # Lugar donde guardara los datos
+---
+
+#Storage Class
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: postgres
+  namespace: juan-namespace
+provisioner: kubernetes.io/no-provisioner # no-provisioner -> Entorno de de infraestructura local
+reclaimPolicy: Retain # Que realizara con mis datos 
+volumeBindingMode: WaitForFirstConsumer
+---
+
+#PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-postgres
+  namespace: juan-namespace
+spec:
+  storageClassName: postgres
+  accessModes:
+    - ReadWriteOnce
+  resources: #Configuración de lo que va a reclamar
+    requests:
+      storage: 5Gi
+---
+
+#CONFIGMAP POSTGRES
+kind: ConfigMap 
+apiVersion: v1 
+metadata:
+  name: postgres-configmap 
+  namespace: juan-namespace
+  labels:
+    app: postgres-server
+data: # Configuration values can be set as key-value properties
+  POSTGRES_PASSWORD: "1234"
+  POSTGRES_USER: "juan"
+  POSTGRES_DB: "juandb"
+---
+
+#DEPLOYMENT POSTGRESQL
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  namespace: juan-namespace
+  labels:
+    app: postgres-server
+spec:
+  selector:
+    matchLabels:
+      app: postgres-server
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: postgres-server
+    spec:
+      containers:
+      - image: postgres:11  #docker pull image
+        name: postgres-db1
+        ports:
+        - containerPort: 5432
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgres-db-volume1
+        env:
+          - name: POSTGRES_PASSWORD #Definición de la variable de entorno
+            valueFrom:
+              configMapKeyRef:
+                name: postgres-configmap #referencia del nombre del configMap
+                key: POSTGRES_PASSWORD #hacer referencia a la variable de entorno donde guarda el valor
+          - name: POSTGRES_USER #Definición de la variable de entorno
+            valueFrom:
+              configMapKeyRef:
+                name: postgres-configmap #referencia del nombre del configMap
+                key: POSTGRES_USER #hacer referencia a la variable de entorno donde guarda el valor
+          - name: POSTGRES_DB #Definición de la variable de entorno
+            valueFrom:
+              configMapKeyRef:
+                name: postgres-configmap #referencia del nombre del configMap
+                key: POSTGRES_DB #hacer referencia a la variable de entorno donde guarda el valor
+      volumes:
+      - name: postgres-db-volume1
+        persistentVolumeClaim:
+           claimName: pvc-postgres
+---
+
+#SERVICE POSTGRESQL
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: juan-namespace
+  labels:
+    app: postgres-server
+spec:
+  selector:
+    app: postgres-server #hacer referencia a la app de algun pod
+  ports:  
+      # By default and for convenience, the `targetPort` is set to the same value as the `port` field.
+    - port: 5300 #puerto que se desea conectar
+      targetPort: 5432 #puerto por defecto de la app
+      protocol: TCP #protocolo que se utilizara
+  type: LoadBalancer #el tipo de servicio
+---
